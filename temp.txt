@@ -1,0 +1,61 @@
+# Manually split the dataframe into training and validation sets
+train_df, val_df = train_test_split(shuffled_data, test_size=0.2, shuffle=False)
+train_df
+
+train_metadata = train_df.drop(['id','image','label'], axis=1)
+# standardize metadata
+scaler = StandardScaler()
+train_metadata = scaler.fit_transform(train_metadata)
+# train_metadata.shape
+
+val_metadata = val_df.drop(['id','image','label'], axis=1)
+# standardize metadata
+scaler = StandardScaler()
+val_metadata = scaler.fit_transform(val_metadata)
+
+
+# create batches for metadata to match the imagedatagenerator
+
+# split np array into chunks of equal size with remainder
+def split_given_size(a, size):
+    return np.split(a, np.arange(size,len(a),size))
+train_metadata_batch = split_given_size(train_metadata, 32)
+val_metadata_batch = split_given_size(val_metadata, 32)
+
+# convert the new arrays into infinite iterators. 
+# the custom_generator needs an infinite iterator to match the imagedatagenerator
+train_metadata_batch_iter = itertools.cycle(train_metadata_batch)
+val_metadata_batch_iter = itertools.cycle(val_metadata_batch)
+
+
+# define custom data generator to feet image and metadata together to model.fit
+def custom_generator(image_gen, metadata):
+    # pprint(vars(metadata))
+    # i = 0
+    while True:
+        # i+=1
+        # print(i)
+        # print('loop')
+        # print(image_gen.filenames)
+        # print(metadata)
+        image_batch, label_batch= next(image_gen)  # Correct unpacking
+        # indices = image_gen.index_array
+        # print ('image: ' + str(len(image_batch)))
+        # print(len(image_batch))
+        metadata_batch = next(metadata, None)
+        # print('meta:' + str(len(metadata_batch)))
+        # ensure metadata_batch has the same number of samples as image_batch
+        # metadata_batch = metadata_batch[:image_batch.shape[0]]
+        # print(filenames)
+        yield {'image_input': image_batch, 'metadata_input': metadata_batch}, label_batch
+
+
+# training the model
+history = model.fit(
+    custom_generator(train_image_generator, train_metadata_batch_iter),
+    steps_per_epoch=len(train_image_generator),
+    epochs=20,
+    validation_data=custom_generator(validation_image_generator, val_metadata_batch_iter),
+    validation_steps=len(validation_image_generator),
+    # verbose=0
+
